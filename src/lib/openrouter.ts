@@ -1,0 +1,219 @@
+// OpenRouter API configuration and utilities
+// Last updated: Force reload trigger
+
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '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'
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+
+// Available free models - updated with correct OpenRouter model IDs (June 2025)
+export const AI_MODELS = {
+  // TNG DeepSeek R1T2 Chimera - Best free model, most popular
+  DEEPSEEK_CHIMERA: 'tngtech/deepseek-r1t2-chimera:free',
+  // Meta Llama 3.3 70B - Great for general text generation
+  LLAMA: 'meta-llama/llama-3.3-70b-instruct:free',
+  // DeepSeek R1 0528 - Good for reasoning
+  DEEPSEEK_R1: 'deepseek/deepseek-r1-0528:free',
+  // NVIDIA Nemotron - Good for agentic tasks
+  NVIDIA: 'nvidia/nemotron-3-nano-30b-a3b:free',
+  // GLM 4.5 Air - Good for general use with reasoning
+  GLM: 'z-ai/glm-4.5-air:free',
+  // Arcee Trinity - Good for creative tasks
+  ARCEE: 'arcee-ai/trinity-large-preview:free',
+} as const
+
+export type AIModel = typeof AI_MODELS[keyof typeof AI_MODELS]
+
+interface OpenRouterMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+interface OpenRouterResponse {
+  id: string
+  choices: {
+    message: {
+      role: string
+      content: string
+    }
+    finish_reason: string
+  }[]
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+}
+
+export async function generateAIResponse(
+  messages: OpenRouterMessage[],
+  model: AIModel = AI_MODELS.LLAMA,
+  options: {
+    temperature?: number
+    max_tokens?: number
+  } = {}
+): Promise<{ content: string; tokensUsed: number }> {
+  const { temperature = 0.7, max_tokens = 2000 } = options
+
+  try {
+    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://job-application.dev',
+        'X-Title': 'Job Application Platform',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens,
+      }),
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('OpenRouter API error:', error)
+      throw new Error(`OpenRouter API error: ${response.status}`)
+    }
+
+    const data: OpenRouterResponse = await response.json()
+    
+    return {
+      content: data.choices[0]?.message?.content || '',
+      tokensUsed: data.usage?.total_tokens || 0,
+    }
+  } catch (error) {
+    console.error('AI generation error:', error)
+    throw error
+  }
+}
+
+// CV Generation prompts
+export const CV_PROMPTS = {
+  summary: (context: Record<string, unknown>) => `Generate a professional summary for a ${context.targetLevel || 'mid-level'} software engineer CV. 
+The person has experience in: ${context.skills || 'software development'}.
+Years of experience: ${context.yearsExperience || '3-5'}.
+Keep it concise (3-4 sentences), professional, and impactful. Focus on value they bring.
+Output only the summary text, no headers or labels.`,
+
+  experience: (context: Record<string, unknown>) => `Generate a work experience entry for a CV.
+Company: ${context.company || 'Tech Company'}
+Position: ${context.position || 'Software Engineer'}
+Duration: ${context.dates || '2020 - Present'}
+Technologies: ${context.technologies || 'Modern tech stack'}
+
+Generate 4-5 bullet points that:
+- Start with strong action verbs
+- Include quantified achievements where possible
+- Highlight technical impact and leadership
+Output in markdown bullet format.`,
+
+  skills: (context: Record<string, unknown>) => `Generate a technical skills section for a ${context.targetLevel || 'mid-level'} software engineer.
+Focus areas: ${context.focusAreas || 'Full-stack development'}
+Include categories: Languages, Frameworks, Databases, Cloud/DevOps, Tools
+Output in markdown format with **Category:** prefix for each group.`,
+
+  education: (context: Record<string, unknown>) => `Generate an education entry for a CV.
+University: ${context.university || 'Technical University'}
+Degree: ${context.degree || 'Bachelor of Science in Computer Science'}
+Graduation: ${context.graduationYear || '2020'}
+Include relevant coursework and GPA if strong (3.5+).
+Output in clean markdown format.`,
+
+  projects: (context: Record<string, unknown>) => `Generate a project entry for a software engineering CV.
+Project Name: ${context.projectName || 'Full-Stack Application'}
+Technologies: ${context.technologies || 'React, Node.js, PostgreSQL'}
+Generate a brief description and 3-4 bullet points highlighting:
+- Technical challenges solved
+- Scale/impact metrics
+- Key features implemented
+Output in markdown format.`,
+}
+
+// CV Analysis prompts
+export const ANALYSIS_PROMPTS = {
+  analyze: (cvText: string, jobDescription?: string) => `You are a brutal, honest CV reviewer for software engineering positions. Analyze this CV:
+
+CV Content:
+${cvText}
+
+${jobDescription ? `Target Job Description:\n${jobDescription}\n` : ''}
+
+Provide analysis in this exact JSON format:
+{
+  "overallScore": <number 0-100>,
+  "structuralScore": <number 0-100>,
+  "technicalScore": <number 0-100>,
+  "atsScore": <number 0-100>,
+  "realismScore": <number 0-100>,
+  "structuralIssues": ["issue1", "issue2"],
+  "technicalIssues": ["issue1", "issue2"],
+  "atsIssues": ["issue1", "issue2"],
+  "realismFlags": ["flag1", "flag2"],
+  "strengths": ["strength1", "strength2"],
+  "improvements": ["improvement1", "improvement2"],
+  "recruiterDoubts": ["doubt1", "doubt2"],
+  "missingKeywords": ["keyword1", "keyword2"],
+  "filterRisk": "low" | "medium" | "high"
+}
+
+Be brutally honest. Recruiters are skeptical. Point out:
+- Vague claims without metrics
+- Buzzwords without substance
+- Unrealistic experience claims
+- Missing fundamentals for claimed seniority
+- ATS optimization issues
+
+Output ONLY valid JSON, no markdown or explanation.`,
+}
+
+// Interview prompts
+export const INTERVIEW_PROMPTS = {
+  generateQuestion: (level: string, focusArea: string, questionNumber: number) => `You are a senior software engineer conducting a technical interview.
+Level: ${level}
+Focus Area: ${focusArea}
+Question Number: ${questionNumber}
+
+Generate ONE technical interview question appropriate for this level and focus area.
+Make it practical and specific, not generic.
+Output only the question, nothing else.`,
+
+  evaluateAnswer: (question: string, answer: string, level: string) => `You are evaluating an interview answer.
+Question: ${question}
+Candidate Answer: ${answer}
+Expected Level: ${level}
+
+Provide evaluation in this exact JSON format:
+{
+  "overallScore": <number 0-100>,
+  "relevanceScore": <number 0-100>,
+  "depthScore": <number 0-100>,
+  "clarityScore": <number 0-100>,
+  "feedback": ["positive point 1", "positive point 2"],
+  "suggestions": ["improvement 1", "improvement 2"],
+  "rating": "Excellent" | "Good" | "Satisfactory" | "Needs Improvement",
+  "followUpQuestion": "<optional follow-up question or null>"
+}
+
+Be fair but thorough. Assess technical accuracy, depth of understanding, and communication clarity.
+Output ONLY valid JSON.`,
+}
+
+// Admin credentials with passwords
+export const ADMIN_CREDENTIALS: Record<string, string> = {
+  'ajax': 'admin123',
+  'yevgenevic': 'admin123',
+  'ajaxmanson': 'admin123',
+} as const
+
+export const ADMIN_USERS = Object.keys(ADMIN_CREDENTIALS) as readonly string[]
+export type AdminUser = keyof typeof ADMIN_CREDENTIALS
+
+export function isAdminUser(username: string): boolean {
+  return username.toLowerCase() in ADMIN_CREDENTIALS
+}
+
+export function validateAdminCredentials(username: string, password: string): boolean {
+  const user = username.toLowerCase()
+  return ADMIN_CREDENTIALS[user] === password
+}

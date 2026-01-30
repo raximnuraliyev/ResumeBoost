@@ -1,0 +1,153 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Session-based system - no user accounts
+model Session {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  userAgent    String?
+  
+  cvs          CV[]
+  aiUsageLogs  AIUsageLog[]
+  issues       Issue[]
+}
+
+// CV document
+model CV {
+  id           String   @id @default(uuid())
+  sessionId    String
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  language     String   @default("en")
+  levelTarget  String?  // junior, mid, senior, etc.
+  qualityScore Int?
+  atsScore     Int?
+  readabilityScore Int?
+  languageScore Int?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  blocks       CVBlock[]
+  analyses     JobAnalysis[]
+  interviews   Interview[]
+}
+
+// CV building blocks - flexible structure
+model CVBlock {
+  id          String   @id @default(uuid())
+  cvId        String
+  cv          CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  
+  blockType   String   // header, summary, skills, experience, education, projects, etc.
+  position    Int
+  isEnabled   Boolean  @default(true)
+  customTitle String?  // for custom/renamed blocks
+  contentJson Json     // flexible content storage
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Job analysis results
+model JobAnalysis {
+  id           String   @id @default(uuid())
+  cvId         String
+  cv           CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  
+  jobDescription String?
+  matchScore   Int?
+  atsScore     Int?
+  realismScore Int?
+  feedbackJson Json?
+  
+  createdAt    DateTime @default(now())
+}
+
+// Interview session
+model Interview {
+  id           String   @id @default(uuid())
+  cvId         String
+  cv           CV       @relation(fields: [cvId], references: [id], onDelete: Cascade)
+  
+  level        String   // junior, strong-junior, mid, strong-mid, senior, strong-senior, pm
+  focus        String?  // algorithms, system-design, language-specific
+  difficulty   Int      @default(50) // 0-100
+  overallScore Int?
+  status       String   @default("pending") // pending, in-progress, completed
+  
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+  
+  questions    InterviewQuestion[]
+}
+
+// Interview questions
+model InterviewQuestion {
+  id           String   @id @default(uuid())
+  interviewId  String
+  interview    Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  
+  topic        String   // algorithms, data-structures, system-design, etc.
+  difficulty   String   // easy, medium, hard, expert
+  questionText String
+  expectedAnswer String?
+  position     Int
+  
+  answer       InterviewAnswer?
+}
+
+// User's interview answers
+model InterviewAnswer {
+  id             String   @id @default(uuid())
+  questionId     String   @unique
+  question       InterviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  
+  userAnswer     String
+  evaluationJson Json?
+  score          Int?
+  
+  createdAt      DateTime @default(now())
+}
+
+// AI usage tracking
+model AIUsageLog {
+  id         String   @id @default(uuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  feature    String   // cv-maker, cv-analyzer, interview
+  modelName  String
+  tokensUsed Int
+  latencyMs  Int?
+  success    Boolean  @default(true)
+  errorMsg   String?
+  
+  createdAt  DateTime @default(now())
+}
+
+// Issue tracking
+model Issue {
+  id          String   @id @default(uuid())
+  sessionId   String?
+  session     Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  
+  feature     String?  // which feature was affected
+  description String
+  screenshot  String?  // URL or base64
+  severity    String   @default("medium") // low, medium, high, critical
+  status      String   @default("open") // open, in-progress, resolved, closed
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

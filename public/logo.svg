@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded rectangle -->
+  <rect x="10" y="10" width="180" height="180" rx="40" ry="40" fill="url(#bgGradient)"/>
+  
+  <!-- Dark overlay for depth -->
+  <rect x="10" y="10" width="180" height="180" rx="40" ry="40" fill="#1e1b4b" fill-opacity="0.3"/>
+  
+  <!-- "JA" Text -->
+  <text x="100" y="130" font-family="Arial Black, Arial, sans-serif" font-size="90" font-weight="900" fill="url(#textGradient)" text-anchor="middle">
+    JA
+  </text>
+  
+  <!-- Subtle shine effect -->
+  <ellipse cx="70" cy="60" rx="50" ry="30" fill="white" fill-opacity="0.1"/>
+</svg>
