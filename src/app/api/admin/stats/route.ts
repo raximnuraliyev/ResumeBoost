@@ -148,12 +148,19 @@ export async function GET(request: Request) {
       { type: 'Suspicious Content', count: stats.security.blockedAttempts.suspiciousContent, blocked: true, lastSeen: getRandomRecentTime() },
     ]
     
+    // Format hourly data for the chart
+    const formattedHourlyData = stats.hourlyTokens.map(item => ({
+      hour: item.hour,
+      tokens: item.tokens,
+    }))
+    
     // Return all stats in the expected format
     return NextResponse.json({
       success: true,
       stats: formattedStats,
       features: formattedFeatures,
       abuse: formattedAbuse,
+      hourlyData: formattedHourlyData,
       data: stats,
       timeRange,
       generatedAt: new Date().toISOString(),

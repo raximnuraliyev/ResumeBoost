@@ -1,19 +1,19 @@
 // Supported languages with formal CV conventions
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-  { code: 'de', name: 'German', flag: '🇩🇪' },
-  { code: 'fr', name: 'French', flag: '🇫🇷' },
-  { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
-  { code: 'lt', name: 'Lithuanian', flag: '🇱🇹' },
-  { code: 'uz', name: 'Uzbek', flag: '🇺🇿' },
-  { code: 'zh', name: 'Mandarin (Simplified)', flag: '🇨🇳' },
-  { code: 'ko', name: 'Korean', flag: '🇰🇷' },
-  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
-  { code: 'el', name: 'Greek', flag: '🇬🇷' },
-  { code: 'uk', name: 'Ukrainian', flag: '🇺🇦' },
-  { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+  { code: 'en', name: 'English', icon: 'US' },
+  { code: 'ru', name: 'Russian', icon: 'RU' },
+  { code: 'de', name: 'German', icon: 'DE' },
+  { code: 'fr', name: 'French', icon: 'FR' },
+  { code: 'nl', name: 'Dutch', icon: 'NL' },
+  { code: 'lt', name: 'Lithuanian', icon: 'LT' },
+  { code: 'uz', name: 'Uzbek', icon: 'UZ' },
+  { code: 'zh', name: 'Mandarin (Simplified)', icon: 'CN' },
+  { code: 'ko', name: 'Korean', icon: 'KR' },
+  { code: 'es', name: 'Spanish', icon: 'ES' },
+  { code: 'pt', name: 'Portuguese', icon: 'PT' },
+  { code: 'el', name: 'Greek', icon: 'GR' },
+  { code: 'uk', name: 'Ukrainian', icon: 'UA' },
+  { code: 'ar', name: 'Arabic', icon: 'SA' },
 ] as const
 
 export type LanguageCode = typeof SUPPORTED_LANGUAGES[number]['code']

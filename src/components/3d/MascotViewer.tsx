@@ -18,12 +18,12 @@ function Model({ url }: { url: string }) {
   })
 
   return (
-    <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.5}>
+    <Float speed={1.2} rotationIntensity={0.15} floatIntensity={0.3}>
       <primitive 
         ref={modelRef}
         object={scene} 
-        scale={1.5}
-        position={[0, -0.5, 0]}
+        scale={2.0}
+        position={[0, -0.2, 0]}
       />
     </Float>
   )
@@ -46,25 +46,26 @@ export function MascotViewer({ className = '' }: MascotViewerProps) {
   return (
     <div className={`w-full h-full ${className}`}>
       <Canvas
-        camera={{ position: [4, 2, 5], fov: 45 }}
+        camera={{ position: [1.8, 0.8, 2.2], fov: 45 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
         <Suspense fallback={<LoadingFallback />}>
-          <ambientLight intensity={0.4} />
+          <ambientLight intensity={0.6} />
           <spotLight
-            position={[10, 10, 10]}
-            angle={0.15}
+            position={[5, 8, 5]}
+            angle={0.2}
             penumbra={1}
-            intensity={1}
+            intensity={1.5}
             castShadow
           />
-          <pointLight position={[-10, -10, -10]} intensity={0.5} color="#6366f1" />
-          <pointLight position={[10, -5, 5]} intensity={0.3} color="#22d3ee" />
+          <pointLight position={[-5, -5, -5]} intensity={0.4} color="#6366f1" />
+          <pointLight position={[5, -3, 3]} intensity={0.4} color="#f59e0b" />
+          <pointLight position={[0, 5, 0]} intensity={0.3} color="#ffffff" />
           
-          <Model url="/mascot.glb" />
+          <Model url="/rocket.glb" />
           
-          <Environment preset="city" />
+          <Environment preset="night" />
           <OrbitControls
             enableZoom={false}
             enablePan={false}
@@ -80,4 +81,4 @@ export function MascotViewer({ className = '' }: MascotViewerProps) {
 }
 
 // Preload the model
-useGLTF.preload('/mascot.glb')
+useGLTF.preload('/rocket.glb')

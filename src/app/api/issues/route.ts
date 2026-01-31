@@ -27,7 +27,7 @@ export async function POST(request: Request) {
       )
     }
     
-    if (!feature || !FEATURES.some(f => f.id === feature)) {
+    if (!feature || (feature !== 'other' && !FEATURES.some(f => f.id === feature))) {
       return NextResponse.json(
         { success: false, error: 'Valid feature selection required' },
         { status: 400 }
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       )
     }
     
-    if (!severity || !ISSUE_SEVERITIES.includes(severity)) {
+    if (!severity || !ISSUE_SEVERITIES.some(s => s.id === severity)) {
       return NextResponse.json(
         { success: false, error: 'Valid severity level required' },
         { status: 400 }
@@ -182,6 +182,41 @@ export async function PATCH(request: Request) {
     console.error('Issue update error:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to update issue' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const issueId = searchParams.get('issueId')
+    
+    if (!issueId) {
+      return NextResponse.json(
+        { success: false, error: 'Issue ID required' },
+        { status: 400 }
+      )
+    }
+    
+    const issue = issues.get(issueId)
+    if (!issue) {
+      return NextResponse.json(
+        { success: false, error: 'Issue not found' },
+        { status: 404 }
+      )
+    }
+    
+    issues.delete(issueId)
+    
+    return NextResponse.json({
+      success: true,
+      message: `Issue ${issueId} deleted successfully`,
+    })
+  } catch (error) {
+    console.error('Issue deletion error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete issue' },
       { status: 500 }
     )
   }

@@ -9,9 +9,12 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CVEngine - AI-Powered CV Builder & Interview Prep",
+  title: "ResumeBoost - AI-Powered CV Builder & Interview Prep",
   description: "Build professional CVs, analyze them with brutal honesty, and prepare for technical interviews. For software engineers, by software engineers.",
   keywords: ["CV builder", "resume", "interview preparation", "software engineer", "AI", "ATS"],
+  icons: {
+    icon: "/logo.ico",
+  },
 };
 
 export default function RootLayout({

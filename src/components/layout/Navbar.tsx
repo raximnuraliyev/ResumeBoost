@@ -31,10 +31,10 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2 group">
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/25 group-hover:shadow-indigo-500/40 transition-shadow">
-              <img src="/logo.svg" alt="Job Application" className="w-full h-full object-cover" />
+              <img src="/logo.ico" alt="ResumeBoost" className="w-full h-full object-cover" />
             </div>
             <span className="text-xl font-bold text-white">
-              Job<span className="text-indigo-400">Application</span>
+              Resume<span className="text-indigo-400">Boost</span>
             </span>
           </Link>
 

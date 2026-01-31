@@ -1084,7 +1084,7 @@ ${previewRef.current.innerHTML}
                 <SelectContent>
                   {SUPPORTED_LANGUAGES.map(lang => (
                     <SelectItem key={lang.code} value={lang.code}>
-                      <span className="mr-2">{lang.flag}</span>
+                      <span className="mr-2 text-xs font-medium bg-gray-700 px-1.5 py-0.5 rounded">{lang.icon}</span>
                       {lang.name}
                     </SelectItem>
                   ))}

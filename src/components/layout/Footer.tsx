@@ -10,10 +10,10 @@ export function Footer() {
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
               <div className="w-10 h-10 rounded-xl overflow-hidden">
-                <img src="/logo.svg" alt="Job Application" className="w-full h-full object-cover" />
+                <img src="/logo.ico" alt="ResumeBoost" className="w-full h-full object-cover" />
               </div>
               <span className="text-xl font-bold text-white">
-                Job<span className="text-indigo-400">Application</span>
+                Resume<span className="text-indigo-400">Boost</span>
               </span>
             </div>
             <p className="text-sm text-gray-400">
@@ -90,7 +90,7 @@ export function Footer() {
         <div className="mt-12 pt-8 border-t border-gray-800">
           <div className="flex flex-col md:flex-row items-center justify-between space-y-4 md:space-y-0">
             <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} Job Application. Built for engineers, by engineers.
+              © {new Date().getFullYear()} ResumeBoost. Built for engineers, by engineers.
             </p>
             <p className="flex items-center space-x-1 text-sm text-gray-500">
               <span>Made with</span>
