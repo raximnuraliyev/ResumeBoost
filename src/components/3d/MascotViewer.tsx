@@ -47,25 +47,42 @@ export function MascotViewer({ className = '' }: MascotViewerProps) {
     <div className={`w-full h-full ${className}`}>
       <Canvas
         camera={{ position: [1.8, 0.8, 2.2], fov: 45 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+        dpr={[1, 2]}
         style={{ background: 'transparent' }}
       >
         <Suspense fallback={<LoadingFallback />}>
-          <ambientLight intensity={0.6} />
-          <spotLight
-            position={[5, 8, 5]}
-            angle={0.2}
-            penumbra={1}
-            intensity={1.5}
+          {/* Enhanced lighting for brighter, clearer appearance */}
+          <ambientLight intensity={1.2} />
+          <directionalLight
+            position={[10, 10, 5]}
+            intensity={2.5}
+            color="#ffffff"
             castShadow
           />
-          <pointLight position={[-5, -5, -5]} intensity={0.4} color="#6366f1" />
-          <pointLight position={[5, -3, 3]} intensity={0.4} color="#f59e0b" />
-          <pointLight position={[0, 5, 0]} intensity={0.3} color="#ffffff" />
+          <spotLight
+            position={[5, 8, 5]}
+            angle={0.3}
+            penumbra={0.5}
+            intensity={3}
+            color="#ffffff"
+            castShadow
+          />
+          <spotLight
+            position={[-5, 8, -5]}
+            angle={0.3}
+            penumbra={0.5}
+            intensity={2}
+            color="#a5b4fc"
+          />
+          <pointLight position={[-5, -5, -5]} intensity={1} color="#818cf8" />
+          <pointLight position={[5, -3, 3]} intensity={1} color="#fbbf24" />
+          <pointLight position={[0, 5, 0]} intensity={0.8} color="#ffffff" />
+          <pointLight position={[0, -2, 5]} intensity={0.6} color="#c4b5fd" />
           
           <Model url="/rocket.glb" />
           
-          <Environment preset="night" />
+          <Environment preset="city" />
           <OrbitControls
             enableZoom={false}
             enablePan={false}

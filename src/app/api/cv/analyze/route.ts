@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { generateAIResponse, AI_MODELS } from '@/lib/openrouter'
+import { parsePDF } from '@/lib/pdf-parser'
 
 // Analysis result type for the API
 interface AnalysisResult {
@@ -21,17 +22,9 @@ interface AnalysisResult {
   companyFit?: string
 }
 
-// Extract text from PDF file
+// Extract text from PDF file using our wrapper
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  try {
-    // Dynamic import to avoid SSR issues
-    const pdfParse = (await import('pdf-parse')).default
-    const data = await pdfParse(buffer)
-    return data.text || ''
-  } catch (error) {
-    console.error('PDF parsing error:', error)
-    throw new Error('Failed to parse PDF file')
-  }
+  return parsePDF(buffer)
 }
 
 // Extract text from DOCX file
@@ -48,7 +41,7 @@ async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
 
 // AI-powered CV analysis with job description context
 async function analyzeWithAI(cvText: string, jobDescription?: string, companyName?: string): Promise<AnalysisResult> {
-  let systemPrompt = `You are a senior technical recruiter and CV expert with 15+ years of experience. You provide brutally honest, actionable feedback on CVs.
+  const systemPrompt = `You are a senior technical recruiter and CV expert with 15+ years of experience. You provide brutally honest, actionable feedback on CVs.
 You must respond ONLY with valid JSON - no markdown, no explanation, just the JSON object.`
 
   let userPrompt = `Analyze this CV and provide detailed feedback in JSON format:
@@ -263,7 +256,6 @@ export async function POST(request: Request) {
     let cvText = ''
     let jobDescription: string | undefined
     let companyName: string | undefined
-    let sessionId = ''
     
     // Handle multipart form data (file upload)
     if (contentType.includes('multipart/form-data')) {
@@ -271,7 +263,7 @@ export async function POST(request: Request) {
       const file = formData.get('file') as File | null
       jobDescription = formData.get('jobDescription') as string | null || undefined
       companyName = formData.get('companyName') as string | null || undefined
-      sessionId = formData.get('sessionId') as string || `session-${Date.now()}`
+      // sessionId available for future analytics: formData.get('sessionId')
       
       if (!file) {
         return NextResponse.json(
@@ -309,7 +301,8 @@ export async function POST(request: Request) {
       cvText = body.cvText || ''
       jobDescription = body.jobDescription
       companyName = body.companyName
-      sessionId = body.sessionId || `session-${Date.now()}`
+      // sessionId available for future analytics tracking
+      void (body.sessionId || `session-${Date.now()}`)
     }
     
     if (!cvText || cvText.trim().length === 0) {

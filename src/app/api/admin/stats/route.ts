@@ -1,181 +1,225 @@
 import { NextResponse } from 'next/server'
 
-// Mock admin stats - In production, these would come from database
-const generateMockStats = () => {
-  return {
-    overview: {
-      totalSessions: Math.floor(Math.random() * 5000) + 10000,
-      activeSessions: Math.floor(Math.random() * 200) + 100,
-      totalTokensUsed: Math.floor(Math.random() * 5000000) + 5000000,
-      avgResponseTime: (Math.random() * 1.5 + 1).toFixed(2),
-      errorRate: (Math.random() * 0.03).toFixed(4),
-      peakHour: `${Math.floor(Math.random() * 4) + 12}:00`,
-    },
-    featureUsage: {
-      'CV Maker': {
-        requests: Math.floor(Math.random() * 5000) + 5000,
-        tokens: Math.floor(Math.random() * 2000000) + 2000000,
-        avgLatency: (Math.random() * 1 + 1.5).toFixed(2),
-        errors: Math.floor(Math.random() * 20),
-        successRate: (95 + Math.random() * 4).toFixed(1),
+// Note: Prisma database is optional - stats work without it
+// Session tracking uses in-memory storage for demo
+
+// OpenRouter API for real usage data
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
+
+interface OpenRouterActivity {
+  id: string
+  created_at: string
+  model: string
+  tokens_prompt: number
+  tokens_completion: number
+  total_cost: number
+  latency_ms: number
+  app_name?: string
+}
+
+// Fetch real usage data from OpenRouter API
+async function fetchOpenRouterUsage(): Promise<{
+  activities: OpenRouterActivity[]
+  totalTokens: number
+  totalCost: number
+  avgLatency: number
+  requestCount: number
+}> {
+  if (!OPENROUTER_API_KEY || !OPENROUTER_API_KEY.startsWith('sk-or-')) {
+    return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       },
-      'CV Analyzer': {
-        requests: Math.floor(Math.random() * 3000) + 3000,
-        tokens: Math.floor(Math.random() * 1500000) + 1000000,
-        avgLatency: (Math.random() * 0.8 + 1.2).toFixed(2),
-        errors: Math.floor(Math.random() * 15),
-        successRate: (96 + Math.random() * 3).toFixed(1),
+    })
+
+    if (!response.ok) {
+      console.error('OpenRouter API key info failed:', response.status)
+      return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
+    }
+
+    const keyInfo = await response.json()
+    
+    // Try to get activity data
+    const activityResponse = await fetch('https://openrouter.ai/api/v1/activity', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       },
-      'Interview': {
-        requests: Math.floor(Math.random() * 2000) + 2000,
-        tokens: Math.floor(Math.random() * 1000000) + 500000,
-        avgLatency: (Math.random() * 0.5 + 1).toFixed(2),
-        errors: Math.floor(Math.random() * 10),
-        successRate: (97 + Math.random() * 2).toFixed(1),
-      },
-    },
-    hourlyTokens: Array.from({ length: 24 }, (_, i) => ({
-      hour: i,
-      tokens: Math.floor(Math.random() * 100000) + 50000,
-      requests: Math.floor(Math.random() * 500) + 200,
-    })),
-    security: {
-      blockedAttempts: {
-        promptInjection: Math.floor(Math.random() * 30) + 10,
-        rateLimitExceeded: Math.floor(Math.random() * 200) + 50,
-        suspiciousContent: Math.floor(Math.random() * 15) + 5,
-      },
-      activeProtections: {
-        rateLimiting: true,
-        promptFiltering: true,
-        sessionValidation: true,
-        ddosProtection: 'monitoring',
-      },
-    },
-    systemHealth: {
-      api: {
-        status: 'healthy',
-        uptime: (99 + Math.random() * 0.99).toFixed(2),
-        responseTime: Math.floor(Math.random() * 30) + 30,
-        memoryUsage: Math.floor(Math.random() * 30) + 40,
-      },
-      openrouter: {
-        status: 'connected',
-        quotaUsed: (Math.random() * 300 + 100).toFixed(2),
-        quotaRemaining: (Math.random() * 500 + 500).toFixed(2),
-        rateLimitUsage: Math.floor(Math.random() * 30) + 20,
-      },
-      database: {
-        status: 'connected',
-        connections: Math.floor(Math.random() * 30) + 10,
-        maxConnections: 100,
-        avgQueryTime: Math.floor(Math.random() * 10) + 8,
-        storage: (Math.random() * 2 + 1).toFixed(1),
-      },
-    },
-    recentErrors: [
-      {
-        time: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-        type: 'API Timeout',
-        message: 'OpenRouter response exceeded 30s',
-        feature: 'CV Maker',
-      },
-      {
-        time: new Date(Date.now() - Math.random() * 7200000).toISOString(),
-        type: 'Validation Error',
-        message: 'Invalid CV block structure',
-        feature: 'CV Maker',
-      },
-      {
-        time: new Date(Date.now() - Math.random() * 10800000).toISOString(),
-        type: 'Rate Limit',
-        message: 'Session rate limit exceeded',
-        feature: 'Interview',
-      },
-    ],
+    })
+
+    let activities: OpenRouterActivity[] = []
+    if (activityResponse.ok) {
+      const activityData = await activityResponse.json()
+      activities = activityData.data || []
+    }
+
+    // Calculate totals from key info
+    const totalTokens = keyInfo.data?.usage || 0
+    const totalCost = keyInfo.data?.total_cost || 0
+    
+    // Calculate average latency from activities
+    const avgLatency = activities.length > 0
+      ? activities.reduce((sum, a) => sum + (a.latency_ms || 0), 0) / activities.length / 1000
+      : 0
+
+    return {
+      activities,
+      totalTokens,
+      totalCost,
+      avgLatency,
+      requestCount: activities.length,
+    }
+  } catch (error) {
+    console.error('Failed to fetch OpenRouter usage:', error)
+    return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
   }
 }
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const timeRange = searchParams.get('timeRange') || '24h'
+  
   try {
-    const { searchParams } = new URL(request.url)
-    const timeRange = searchParams.get('timeRange') || '24h'
-    const section = searchParams.get('section')
+    // Fetch real OpenRouter usage data
+    const openRouterData = await fetchOpenRouterUsage()
     
-    // Simulate data fetching delay
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Database stats disabled - Prisma Postgres local server not running
+    // Sessions are tracked in-memory for demo purposes
+    const dbStats = { totalSessions: 0, activeSessions: 0 }
     
-    const stats = generateMockStats()
+    // Calculate stats from OpenRouter activities
+    const activities = openRouterData.activities
     
-    // Return specific section if requested
-    if (section) {
-      const sectionData = stats[section as keyof typeof stats]
-      if (!sectionData) {
-        return NextResponse.json(
-          { success: false, error: `Unknown section: ${section}` },
-          { status: 400 }
-        )
+    // Group by feature (based on app name or model)
+    const featureUsageMap: Record<string, {
+      name: string
+      tokens: number
+      requests: number
+      totalLatency: number
+      latencyCount: number
+      cost: number
+    }> = {}
+    
+    // Process activities into feature buckets
+    activities.forEach(activity => {
+      const featureName = activity.app_name || 'CV Maker'
+      
+      if (!featureUsageMap[featureName]) {
+        featureUsageMap[featureName] = {
+          name: featureName,
+          tokens: 0,
+          requests: 0,
+          totalLatency: 0,
+          latencyCount: 0,
+          cost: 0,
+        }
       }
-      return NextResponse.json({
-        success: true,
-        data: sectionData,
-        timeRange,
-        generatedAt: new Date().toISOString(),
-      })
+      
+      featureUsageMap[featureName].tokens += (activity.tokens_prompt || 0) + (activity.tokens_completion || 0)
+      featureUsageMap[featureName].requests += 1
+      featureUsageMap[featureName].cost += activity.total_cost || 0
+      
+      if (activity.latency_ms) {
+        featureUsageMap[featureName].totalLatency += activity.latency_ms
+        featureUsageMap[featureName].latencyCount += 1
+      }
+    })
+
+    // If no activities but we have usage, create a default entry
+    if (Object.keys(featureUsageMap).length === 0 && openRouterData.totalTokens > 0) {
+      featureUsageMap['Job Application Platform'] = {
+        name: 'Job Application Platform',
+        tokens: openRouterData.totalTokens,
+        requests: openRouterData.requestCount || 1,
+        totalLatency: 0,
+        latencyCount: 0,
+        cost: openRouterData.totalCost,
+      }
     }
-    
-    // Return formatted data for the admin dashboard
+
+    const formattedFeatures = Object.values(featureUsageMap).map(feature => ({
+      name: feature.name,
+      tokens: feature.tokens,
+      requests: feature.requests,
+      avgLatency: feature.latencyCount > 0 
+        ? parseFloat((feature.totalLatency / feature.latencyCount / 1000).toFixed(2))
+        : 0,
+      errors: 0,
+      cost: feature.cost,
+    }))
+
+    // Sort by requests descending
+    formattedFeatures.sort((a, b) => b.requests - a.requests)
+
+    // Calculate hourly data from activities
+    const hourlyUsage: Record<number, number> = {}
+    activities.forEach(activity => {
+      const hour = new Date(activity.created_at).getHours()
+      hourlyUsage[hour] = (hourlyUsage[hour] || 0) + (activity.tokens_prompt || 0) + (activity.tokens_completion || 0)
+    })
+
+    const hourlyData = Array.from({ length: 24 }, (_, i) => ({
+      hour: i,
+      tokens: hourlyUsage[i] || 0,
+    }))
+
+    // Find peak hour
+    let peakHour = '--:--'
+    let maxUsage = 0
+    Object.entries(hourlyUsage).forEach(([hour, tokens]) => {
+      if (tokens > maxUsage) {
+        maxUsage = tokens
+        peakHour = `${hour.padStart(2, '0')}:00`
+      }
+    })
+
+    // Format stats
     const formattedStats = {
-      totalSessions: stats.overview.totalSessions,
-      activeSessions: stats.overview.activeSessions,
-      totalTokens: stats.overview.totalTokensUsed,
-      avgResponseTime: parseFloat(stats.overview.avgResponseTime),
-      errorRate: parseFloat(stats.overview.errorRate),
-      peakHour: stats.overview.peakHour,
+      totalSessions: dbStats.totalSessions,
+      activeSessions: dbStats.activeSessions,
+      totalTokens: openRouterData.totalTokens,
+      avgResponseTime: openRouterData.avgLatency,
+      errorRate: 0,
+      peakHour,
+      totalCost: openRouterData.totalCost,
     }
-    
-    const formattedFeatures = Object.entries(stats.featureUsage).map(([name, data]) => ({
-      name,
-      tokens: data.tokens,
-      requests: data.requests,
-      avgLatency: parseFloat(data.avgLatency),
-      errors: data.errors,
-    }))
-    
-    const formattedAbuse = [
-      { type: 'Prompt Injection', count: stats.security.blockedAttempts.promptInjection, blocked: true, lastSeen: getRandomRecentTime() },
-      { type: 'Rate Limit Exceeded', count: stats.security.blockedAttempts.rateLimitExceeded, blocked: true, lastSeen: getRandomRecentTime() },
-      { type: 'Suspicious Content', count: stats.security.blockedAttempts.suspiciousContent, blocked: true, lastSeen: getRandomRecentTime() },
-    ]
-    
-    // Format hourly data for the chart
-    const formattedHourlyData = stats.hourlyTokens.map(item => ({
-      hour: item.hour,
-      tokens: item.tokens,
-    }))
-    
-    // Return all stats in the expected format
+
+    // Return all stats
     return NextResponse.json({
       success: true,
       stats: formattedStats,
       features: formattedFeatures,
-      abuse: formattedAbuse,
-      hourlyData: formattedHourlyData,
-      data: stats,
+      abuse: [],
+      hourlyData,
       timeRange,
       generatedAt: new Date().toISOString(),
+      source: openRouterData.totalTokens > 0 ? 'openrouter' : 'empty',
     })
   } catch (error) {
     console.error('Admin stats error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch admin stats' },
-      { status: 500 }
-    )
+    
+    // Return empty stats on error
+    return NextResponse.json({
+      success: true,
+      stats: {
+        totalSessions: 0,
+        activeSessions: 0,
+        totalTokens: 0,
+        avgResponseTime: 0,
+        errorRate: 0,
+        peakHour: '--:--',
+      },
+      features: [],
+      abuse: [],
+      hourlyData: Array.from({ length: 24 }, (_, i) => ({ hour: i, tokens: 0 })),
+      timeRange,
+      generatedAt: new Date().toISOString(),
+      source: 'error',
+    })
   }
-}
-
-function getRandomRecentTime() {
-  const minutes = Math.floor(Math.random() * 360) // Up to 6 hours
-  if (minutes < 60) return `${minutes}m ago`
-  return `${Math.floor(minutes / 60)}h ago`
 }

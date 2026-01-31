@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { FileText, Search, MessageSquare, ArrowRight, Sparkles, Shield, Zap } from 'lucide-react'
+import { FileText, Search, MessageSquare, ArrowRight, Sparkles, Shield, Zap, CheckCircle, Target, Globe } from 'lucide-react'
 import { Button, Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui'
 
 // Dynamic import for 3D component to avoid SSR issues
@@ -145,7 +145,7 @@ export default function HomePage() {
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center">
-                    <span className="text-lg">✓</span>
+                    <CheckCircle className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-white">ATS Optimized</p>
@@ -162,10 +162,10 @@ export default function HomePage() {
               >
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-600 flex items-center justify-center">
-                    <span className="text-lg">🎯</span>
+                    <Globe className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-white">13+ Languages</p>
+                    <p className="text-sm font-medium text-white">14+ Languages</p>
                     <p className="text-xs text-gray-400">Formal tone enforced</p>
                   </div>
                 </div>
@@ -269,13 +269,19 @@ export default function HomePage() {
               className="grid grid-cols-2 gap-4"
             >
               {[
-                { label: 'Languages Supported', value: '14' },
-                { label: 'ATS Compatibility', value: '95%' },
-                { label: 'Interview Topics', value: '50+' },
-                { label: 'No Registration', value: '✓' },
+                { label: 'Languages Supported', value: '14', isIcon: false },
+                { label: 'ATS Compatibility', value: '95%', isIcon: false },
+                { label: 'Interview Topics', value: '50+', isIcon: false },
+                { label: 'No Registration', value: 'check', isIcon: true },
               ].map((stat) => (
                 <Card key={stat.label} glass className="p-6 text-center">
-                  <p className="text-4xl font-bold gradient-text mb-2">{stat.value}</p>
+                  {stat.isIcon ? (
+                    <div className="flex justify-center mb-2">
+                      <CheckCircle className="w-10 h-10 text-emerald-400" />
+                    </div>
+                  ) : (
+                    <p className="text-4xl font-bold gradient-text mb-2">{stat.value}</p>
+                  )}
                   <p className="text-sm text-gray-400">{stat.label}</p>
                 </Card>
               ))}

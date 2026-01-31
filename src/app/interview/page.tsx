@@ -197,12 +197,12 @@ export default function InterviewPage() {
       
       const welcomeMessage = `Welcome to your **${roleName}** interview preparation session!
 
-📊 **Interview Details:**
+**Interview Details:**
 • Level: ${levelName}
 • Questions: ${maxQuestions}
 • Estimated Duration: ${Math.round(questions.reduce((sum, q) => sum + q.expectedDuration, 0))} minutes
 
-${selectedRoleData ? `💰 Salary Range: ${selectedRoleData.salary}\n📅 Experience Required: ${selectedRoleData.experience}` : ''}
+${selectedRoleData ? `Salary Range: ${selectedRoleData.salary}\nExperience Required: ${selectedRoleData.experience}` : ''}
 
 I'll ask you real interview questions that you might encounter in actual job interviews. Take your time to think through each answer – clarity and depth matter.
 
@@ -211,7 +211,7 @@ I'll ask you real interview questions that you might encounter in actual job int
 **Question 1 of ${maxQuestions}:**
 ${firstQ.question}
 
-${showTips && firstQ.tips.length > 0 ? `\n💡 **Tips to help you answer:**\n${firstQ.tips.map(t => `• ${t}`).join('\n')}` : ''}`
+${showTips && firstQ.tips.length > 0 ? `\n**Tips to help you answer:**\n${firstQ.tips.map(t => `• ${t}`).join('\n')}` : ''}`
 
       setMessages([
         {
@@ -333,7 +333,7 @@ ${showTips && firstQ.tips.length > 0 ? `\n💡 **Tips to help you answer:**\n${f
         // Format feedback
         const feedbackStr = evaluation.feedback?.join('\n') || 'Good attempt!'
         const suggestionsStr = evaluation.suggestions?.length > 0 
-          ? '\n\n⚠️ ' + evaluation.suggestions.join('\n⚠️ ') 
+          ? '\n\n**Suggestions:**\n• ' + evaluation.suggestions.join('\n• ') 
           : ''
         
         aiResponse = `**Evaluation:**\nScore: ${score}/100\n${feedbackStr}${suggestionsStr}\n\n---\n\nThank you for completing the interview! Let me compile your results...`
@@ -423,7 +423,7 @@ ${showTips && firstQ.tips.length > 0 ? `\n💡 **Tips to help you answer:**\n${f
         const nextQ = storedQuestions[nextQuestionNum - 1] || { question: getQuestion(nextQuestionNum) }
         const feedbackStr = evaluation.feedback?.join('\n') || 'Good attempt!'
         const suggestionsStr = evaluation.suggestions?.length > 0 
-          ? '\n\n⚠️ ' + evaluation.suggestions.join('\n⚠️ ') 
+          ? '\n\n**Suggestions:**\n• ' + evaluation.suggestions.join('\n• ') 
           : ''
         
         aiResponse = `**Evaluation:**\nScore: ${score}/100\n${feedbackStr}${suggestionsStr}\n\n---\n\n**Question ${nextQuestionNum}:**\n${nextQ.question}`
@@ -574,7 +574,7 @@ ${showTips && firstQ.tips.length > 0 ? `\n💡 **Tips to help you answer:**\n${f
                       <Badge variant="success">{selectedRoleData.salary}</Badge>
                     </div>
                     <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
-                      <span>📅 {selectedRoleData.experience}</span>
+                      <span>Experience: {selectedRoleData.experience}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1">
                       {selectedRoleData.focusAreas.map((area, idx) => (
@@ -817,7 +817,7 @@ ${showTips && firstQ.tips.length > 0 ? `\n💡 **Tips to help you answer:**\n${f
                             if (line.startsWith('**') && line.endsWith('**')) {
                               return <p key={i} className="font-semibold mb-2">{line.replace(/\*\*/g, '')}</p>
                             }
-                            if (line.startsWith('⚠️')) {
+                            if (line.startsWith('•')) {
                               return <p key={i} className="text-yellow-400 text-xs mt-1">{line}</p>
                             }
                             if (line === '---') {

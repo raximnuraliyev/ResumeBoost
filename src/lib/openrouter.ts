@@ -1,8 +1,14 @@
 // OpenRouter API configuration and utilities
 // Last updated: Force reload trigger
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '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'
+// Use environment variable - DO NOT hardcode API keys!
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+
+// Check if API key is configured
+const isApiKeyConfigured = () => {
+  return OPENROUTER_API_KEY && OPENROUTER_API_KEY !== 'your-openrouter-api-key-here' && OPENROUTER_API_KEY.startsWith('sk-or-')
+}
 
 // Available free models - updated with correct OpenRouter model IDs (June 2025)
 export const AI_MODELS = {
@@ -53,6 +59,13 @@ export async function generateAIResponse(
 ): Promise<{ content: string; tokensUsed: number }> {
   const { temperature = 0.7, max_tokens = 2000 } = options
 
+  // Check if API key is configured
+  if (!isApiKeyConfigured()) {
+    console.error('OpenRouter API key not configured. Please set OPENROUTER_API_KEY in your .env file.')
+    console.error('Get your API key from: https://openrouter.ai/keys')
+    throw new Error('AI service not configured. Please add OPENROUTER_API_KEY to your .env file. Get your key from https://openrouter.ai/keys')
+  }
+
   try {
     const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
@@ -71,8 +84,15 @@ export async function generateAIResponse(
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('OpenRouter API error:', error)
+      const errorText = await response.text()
+      console.error('OpenRouter API error:', errorText)
+      
+      if (response.status === 401) {
+        throw new Error('Invalid OpenRouter API key. Please check your OPENROUTER_API_KEY in .env file. Get a new key from https://openrouter.ai/keys')
+      }
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+      }
       throw new Error(`OpenRouter API error: ${response.status}`)
     }
 

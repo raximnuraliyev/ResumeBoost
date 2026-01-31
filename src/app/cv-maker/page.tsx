@@ -68,7 +68,6 @@ const defaultSectionStyles: Record<string, SectionStyle> = {
   content: { alignment: 'left', fontSize: 11, color: '#374151', fontWeight: 'normal' },
 }
 
-// CV Score Calculator Function
 function calculateCVScores(blocks: CVBlock[]): {
   quality: number
   readability: number
@@ -90,9 +89,7 @@ function calculateCVScores(blocks: CVBlock[]): {
   let languageScore = 0
 
   const enabledBlocks = blocks.filter(b => b.isEnabled)
-  
-  // Completeness scoring (25 points max)
-  // Check each section for content
+
   const header = enabledBlocks.find(b => b.blockType === 'header')?.content as any
   const summary = enabledBlocks.find(b => b.blockType === 'summary')?.content as any
   const skills = enabledBlocks.find(b => b.blockType === 'skills')?.content as any
@@ -687,52 +684,155 @@ ${previewRef.current.innerHTML}
         if (previewRef.current) {
           try {
             // Dynamic import html2canvas and jspdf
-            const html2canvas = (await import('html2canvas')).default
-            const { jsPDF } = await import('jspdf')
+            const html2canvasModule = await import('html2canvas')
+            const html2canvas = html2canvasModule.default
+            const jsPDFModule = await import('jspdf')
+            const jsPDF = jsPDFModule.jsPDF
             
-            // Clone the element to avoid modifying the original
             const element = previewRef.current
-            
-            const canvas = await html2canvas(element, {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              logging: false,
-              allowTaint: true,
-              removeContainer: true,
-              windowWidth: element.scrollWidth,
-              windowHeight: element.scrollHeight,
-            })
-            
-            const imgData = canvas.toDataURL('image/png', 1.0)
-            const pdf = new jsPDF({
-              orientation: 'p',
-              unit: 'mm',
-              format: 'a4',
-            })
-            
-            const imgWidth = 210 // A4 width in mm
-            const pageHeight = 297 // A4 height in mm
-            const imgHeight = (canvas.height * imgWidth) / canvas.width
-            let heightLeft = imgHeight
-            let position = 0
-            
-            // Add first page
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
-            heightLeft -= pageHeight
-            
-            // Add additional pages if needed
-            while (heightLeft > 0) {
-              position = heightLeft - imgHeight
-              pdf.addPage()
-              pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST')
-              heightLeft -= pageHeight
+
+            // Wait for fonts and images to load
+            await new Promise(resolve => setTimeout(resolve, 500))
+
+            // Create a sanitized clone of the preview to avoid html2canvas parsing unsupported CSS like oklch()
+            const clone = element.cloneNode(true) as HTMLElement
+
+            // Walk the original and clone simultaneously, copying computed color-related styles as inline styles
+            const colorProps = [
+              'color', 'background-color', 'background', 'background-image', 'border-color',
+              'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+              'box-shadow', 'text-shadow'
+            ]
+
+            const convertOklchToRGBA = (Lparam: number, c: number, hDeg: number, alpha = 1) => {
+              // Convert OKLCH (L in 0..1, C, h in degrees) to sRGB rgba string
+              const h = (hDeg * Math.PI) / 180
+              const a_ = c * Math.cos(h)
+              const b_ = c * Math.sin(h)
+
+              // convert OKLab-like values
+              const L = Lparam
+              const lp = L + 0.3963377774 * a_ + 0.2158037573 * b_
+              const mp = L - 0.1055613458 * a_ - 0.0638541728 * b_
+              const sp = L - 0.0894841775 * a_ - 1.291485548 * b_
+
+              const lr = Math.pow(lp, 3)
+              const mr = Math.pow(mp, 3)
+              const sr = Math.pow(sp, 3)
+
+              let R = +4.0767416621 * lr - 3.3077115913 * mr + 0.2309699292 * sr
+              let G = -1.2684380046 * lr + 2.6097574011 * mr - 0.3413193965 * sr
+              let B = -0.0041960863 * lr - 0.7034186147 * mr + 1.707614701 * sr
+
+              const toSRGB = (v: number) => {
+                v = Math.max(0, Math.min(1, v))
+                if (v <= 0.0031308) return 12.92 * v
+                return 1.055 * Math.pow(v, 1 / 2.4) - 0.055
+              }
+
+              R = toSRGB(R)
+              G = toSRGB(G)
+              B = toSRGB(B)
+
+              const r = Math.round(R * 255)
+              const g = Math.round(G * 255)
+              const bVal = Math.round(B * 255)
+              return `rgba(${r}, ${g}, ${bVal}, ${alpha})`
             }
-            
-            pdf.save('cv.pdf')
+
+            const parseOklchFunction = (token: string) => {
+              // token is the inside of oklch(...)
+              // examples: "65% 0.12 250deg / 0.8" or "65% 0.12 250deg"
+              const parts = token.split('/')
+              const main = parts[0].trim()
+              const alphaPart = parts[1] ? parts[1].trim() : undefined
+              const items = main.split(/\s+/)
+              if (items.length < 3) return null
+              const Lraw = items[0]
+              const Craw = items[1]
+              const Hraw = items.slice(2).join(' ')
+              const L = Lraw.endsWith('%') ? parseFloat(Lraw) / 100 : parseFloat(Lraw)
+              const C = parseFloat(Craw)
+              const H = Hraw.endsWith('deg') ? parseFloat(Hraw) : parseFloat(Hraw)
+              const alpha = alphaPart ? parseFloat(alphaPart) : 1
+              if (Number.isNaN(L) || Number.isNaN(C) || Number.isNaN(H)) return null
+              return convertOklchToRGBA(L, C, H, alpha)
+            }
+
+            const replaceOklchInString = (s: string) => {
+              return s.replace(/oklch\(([^)]+)\)/g, (_, token) => {
+                const conv = parseOklchFunction(token)
+                return conv || _
+              })
+            }
+
+            const copyComputedColors = (orig: Element, target: HTMLElement) => {
+              try {
+                const cs = window.getComputedStyle(orig as Element)
+                colorProps.forEach(prop => {
+                  let val = cs.getPropertyValue(prop)
+                  if (val) {
+                    // convert any oklch(...) occurrences to rgba()
+                    try { val = replaceOklchInString(val) } catch (e) {}
+                    const jsProp = prop.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+                    try {
+                      (target.style as any)[jsProp] = val
+                    } catch (e) {
+                      // ignore assignment errors
+                    }
+                  }
+                })
+              } catch (e) {
+                // ignore if getComputedStyle fails for some nodes
+              }
+            }
+
+            const walkAndCopy = (origNode: Element, cloneNode: Node) => {
+              if (!origNode || !cloneNode) return
+              if (cloneNode.nodeType === Node.ELEMENT_NODE) {
+                copyComputedColors(origNode, cloneNode as HTMLElement)
+              }
+              const origChildren = Array.from(origNode.children || [])
+              const cloneChildren = Array.from((cloneNode as Element).children || [])
+              for (let i = 0; i < origChildren.length; i++) {
+                walkAndCopy(origChildren[i], cloneChildren[i])
+              }
+            }
+
+            try {
+              // copy computed colors into clone
+              try { walkAndCopy(element, clone) } catch (e) {}
+
+              // Build full HTML with head so Puppeteer reproduces the page accurately
+              const headHtml = document.head.innerHTML
+              const fullHtml = `<!doctype html><html><head>${headHtml}</head><body>${clone.outerHTML}</body></html>`
+
+              // Send to server-side PDF generator (Puppeteer)
+              const resp = await fetch('/api/cv/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ html: fullHtml }),
+              })
+
+              if (!resp.ok) {
+                throw new Error('Server PDF generation failed')
+              }
+
+              const arrayBuffer = await resp.arrayBuffer()
+              const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'cv.pdf'
+              a.click()
+              URL.revokeObjectURL(url)
+              return
+            } catch (err) {
+              console.warn('Server-side PDF export failed, falling back to client raster export:', err)
+            }
           } catch (error) {
             console.error('PDF export error:', error)
-            alert('Failed to export PDF. Please try again.')
+            alert('Failed to export PDF: ' + (error instanceof Error ? error.message : 'Unknown error'))
           }
         } else {
           alert('Preview not available. Please wait for the preview to load.')
