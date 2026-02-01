@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateAIResponse, CV_PROMPTS, AI_MODELS } from '@/lib/openrouter'
 import { CV_BLOCK_TYPES } from '@/lib/constants'
+import { trackRequest, trackFeatureUsage, trackSession } from '@/lib/security-metrics'
 
 // Fallback mock responses when AI fails
 const mockResponses: Record<string, (context: Record<string, unknown>, language: string) => string> = {
@@ -60,7 +61,7 @@ CRITICAL: Only include sections that have data. Do not fabricate information.`
         { role: 'user', content: prompt }
       ],
       AI_MODELS.DEEPSEEK_CHIMERA,
-      { temperature: 0.6, max_tokens: 3000 }
+      { temperature: 0.6, max_tokens: 3000, feature: 'CV Enhancement' }
     )
 
     // Clean and parse response
@@ -96,7 +97,7 @@ Keep it professional, concise, and impactful. Output only the content.`
         { role: 'user', content: fallbackPrompt }
       ],
       AI_MODELS.DEEPSEEK_CHIMERA,
-      { temperature: 0.7, max_tokens: 1000 }
+      { temperature: 0.7, max_tokens: 1000, feature: 'CV Generation' }
     )
   }
 
@@ -107,14 +108,21 @@ Keep it professional, concise, and impactful. Output only the content.`
       { role: 'user', content: prompt }
     ],
     AI_MODELS.DEEPSEEK_CHIMERA,
-    { temperature: 0.7, max_tokens: 1500 }
+    { temperature: 0.7, max_tokens: 1500, feature: 'CV Generation' }
   )
 }
 
 export async function POST(request: Request) {
+  trackRequest()
   try {
     const body = await request.json()
     const { sessionId, blockType, context = {}, language = 'en', content, targetLevel, targetJob, blocks } = body
+    
+    // Track feature usage
+    trackFeatureUsage('CV Maker')
+    if (sessionId) {
+      trackSession(sessionId, 'CV Maker')
+    }
     
     // Handle full CV enhancement request (from CV Maker page)
     if (content && targetLevel && blocks) {

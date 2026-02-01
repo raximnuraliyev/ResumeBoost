@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
+import { trackRequest, trackSessionValidation, trackSession } from '@/lib/security-metrics'
 
 // In production, this would use a database like Prisma
 // For hackathon demo, we use in-memory storage
@@ -11,6 +12,7 @@ const sessions = new Map<string, {
 }>()
 
 export async function POST() {
+  trackRequest()
   try {
     const sessionId = uuidv4()
     const session = {
@@ -21,6 +23,8 @@ export async function POST() {
     }
     
     sessions.set(sessionId, session)
+    trackSessionValidation()
+    trackSession(sessionId)
     
     return NextResponse.json({
       success: true,
@@ -37,6 +41,7 @@ export async function POST() {
 }
 
 export async function GET(request: Request) {
+  trackRequest()
   try {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')
@@ -59,6 +64,8 @@ export async function GET(request: Request) {
     
     // Update last active
     session.lastActive = new Date()
+    trackSessionValidation()
+    trackSession(sessionId)
     
     return NextResponse.json({
       success: true,

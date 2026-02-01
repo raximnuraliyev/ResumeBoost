@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { SENIORITY_LEVELS } from '@/lib/constants'
 import { generateAIResponse, INTERVIEW_PROMPTS, AI_MODELS } from '@/lib/openrouter'
+import { trackRequest, trackSanitizedInput, trackSessionValidation, trackPromptFilter, trackBlockedRequest, trackFeatureUsage, trackSession } from '@/lib/security-metrics'
 
 // Interview question bank organized by level and focus area (fallback)
 const questionBank: Record<string, Record<string, string[]>> = {
@@ -121,6 +122,7 @@ const followUpQuestions: Record<string, string[]> = {
 }
 
 export async function POST(request: Request) {
+  trackRequest()
   try {
     const body = await request.json()
     const { 
@@ -134,14 +136,20 @@ export async function POST(request: Request) {
     } = body
     
     if (!sessionId) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Session ID required' },
         { status: 400 }
       )
     }
     
+    trackSessionValidation()
+    trackSession(sessionId, 'Interview')
+    trackFeatureUsage('Interview')
+    
     // Validate level
     if (!SENIORITY_LEVELS.some(l => l.id === level)) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Invalid seniority level' },
         { status: 400 }
@@ -201,7 +209,7 @@ export async function POST(request: Request) {
             { role: 'user', content: prompt }
           ],
           AI_MODELS.DEEPSEEK_CHIMERA,
-          { temperature: 0.5, max_tokens: 1000 }
+          { temperature: 0.5, max_tokens: 1000, feature: 'Interview Evaluation' }
         )
         
         const evaluation = JSON.parse(result.content)
@@ -218,16 +226,36 @@ export async function POST(request: Request) {
       } catch (aiError) {
         console.warn('AI evaluation failed, using heuristic:', aiError)
         
-        // Fallback heuristic evaluation
+        // Fallback heuristic evaluation - STRICT scoring
         const answerLength = answer.trim().length
-        const hasKeywords = /complexity|algorithm|data structure|scalab|optim|implement/i.test(answer)
-        const hasExamples = /for example|such as|like|consider/i.test(answer)
+        const wordCount = answer.trim().split(/\s+/).length
+        const hasKeywords = /complexity|algorithm|data structure|scalab|optim|implement|O\(|time|space|memory|recursive|iterative|hash|tree|array|list|queue|stack/i.test(answer)
+        const hasExamples = /for example|such as|like|consider|instance|scenario|case/i.test(answer)
         const isStructured = answer.includes('\n') || answer.length > 200
+        const hasExplanation = /because|therefore|this means|which allows|the reason|this is/i.test(answer)
+        const isNonAnswer = /don't know|not sure|i would google|no idea|skip|pass/i.test(answer)
         
-        const relevanceScore = Math.min(100, 40 + (hasKeywords ? 30 : 0) + Math.random() * 30)
-        const depthScore = Math.min(100, 30 + (answerLength > 100 ? 30 : 0) + (hasExamples ? 20 : 0) + Math.random() * 20)
-        const clarityScore = Math.min(100, 50 + (isStructured ? 30 : 0) + Math.random() * 20)
-        const overallScore = Math.round((relevanceScore + depthScore + clarityScore) / 3)
+        // Very strict base scoring
+        let baseScore = 10 // Start very low
+        
+        // Penalize non-answers heavily
+        if (isNonAnswer || wordCount < 5) {
+          baseScore = Math.floor(Math.random() * 15) + 5 // 5-20
+        } else if (wordCount < 20) {
+          // Very short answers
+          baseScore = Math.floor(Math.random() * 20) + 15 // 15-35
+        } else if (wordCount < 50) {
+          // Short answers
+          baseScore = 25 + (hasKeywords ? 15 : 0) + Math.floor(Math.random() * 15) // 25-55
+        } else {
+          // Reasonable length answers
+          baseScore = 35 + (hasKeywords ? 20 : 0) + (hasExamples ? 15 : 0) + (hasExplanation ? 15 : 0) + Math.floor(Math.random() * 15)
+        }
+        
+        const relevanceScore = Math.min(100, baseScore + (hasKeywords ? 10 : -10))
+        const depthScore = Math.min(100, baseScore + (answerLength > 100 ? 10 : -15) + (hasExamples ? 10 : 0))
+        const clarityScore = Math.min(100, baseScore + (isStructured ? 15 : 0) + (hasExplanation ? 10 : 0))
+        const overallScore = Math.max(5, Math.min(100, Math.round((relevanceScore + depthScore + clarityScore) / 3)))
         
         const feedback: string[] = []
         const suggestions: string[] = []
@@ -301,33 +329,82 @@ export async function POST(request: Request) {
         questionsCount: scores.length,
       }))
       
-      // Generate summary
+      // Generate summary with ALWAYS providing study recommendations
       const strengths: string[] = []
       const weaknesses: string[] = []
       const studyRecommendations: string[] = []
       
+      // Study resource mapping for each category
+      const studyResources: Record<string, string[]> = {
+        'Data Structures': [
+          'Review arrays, linked lists, trees, and hash maps',
+          'Practice LeetCode easy/medium problems on data structures',
+          'Study time/space complexity for common operations'
+        ],
+        'Algorithms': [
+          'Study sorting algorithms (quicksort, mergesort, heapsort)',
+          'Practice dynamic programming on LeetCode',
+          'Review graph algorithms (BFS, DFS, Dijkstra)'
+        ],
+        'System Design': [
+          'Read "Designing Data-Intensive Applications" by Martin Kleppmann',
+          'Study common patterns: load balancing, caching, sharding',
+          'Practice designing systems like URL shortener, chat app'
+        ],
+        'Behavioral': [
+          'Prepare STAR method stories for common scenarios',
+          'Practice explaining past projects clearly',
+          'Review leadership and teamwork examples'
+        ]
+      }
+      
       categoryAverages.forEach(({ category, avgScore }) => {
-        if (avgScore >= 70) {
+        if (avgScore >= 75) {
           strengths.push(category)
-        } else if (avgScore < 50) {
+        } else if (avgScore >= 50) {
+          // Moderate performance - still needs work
+          weaknesses.push(`${category} (needs improvement)`)
+          const resources = studyResources[category] || [`Review ${category} fundamentals`]
+          studyRecommendations.push(resources[0])
+        } else {
+          // Poor performance
           weaknesses.push(category)
-          studyRecommendations.push(`Review ${category} fundamentals and practice more problems.`)
+          const resources = studyResources[category] || [`Review ${category} fundamentals and practice more problems`]
+          studyRecommendations.push(...resources.slice(0, 2))
         }
       })
       
+      // Always add general recommendations based on overall score
+      if (avgScore < 40) {
+        studyRecommendations.push('Consider taking a structured course on data structures & algorithms')
+        studyRecommendations.push('Practice explaining your thought process out loud')
+      } else if (avgScore < 60) {
+        studyRecommendations.push('Focus on depth - practice explaining WHY, not just WHAT')
+        studyRecommendations.push('Do mock interviews to improve communication')
+      } else if (avgScore < 80) {
+        studyRecommendations.push('Work on edge cases and complexity analysis')
+      }
+      
+      // Ensure we always have at least some recommendations
+      if (studyRecommendations.length === 0) {
+        studyRecommendations.push('Keep practicing with increasingly difficult problems')
+        studyRecommendations.push('Focus on system design for senior-level preparation')
+      }
+      
       if (strengths.length === 0) {
-        strengths.push('Completed the full interview')
+        strengths.push('Motivation')
       }
       
       if (weaknesses.length === 0) {
         weaknesses.push('Keep practicing to maintain your skills')
       }
       
-      // Overall readiness assessment
-      const readinessLevel = avgScore >= 80 ? 'Ready for Senior Interviews' :
-                            avgScore >= 65 ? 'Ready for Mid-level Interviews' :
-                            avgScore >= 50 ? 'Approaching Interview Ready' :
-                            'More Preparation Needed'
+      // Overall readiness assessment - more honest thresholds
+      const readinessLevel = avgScore >= 85 ? 'Ready for Senior Interviews' :
+                            avgScore >= 70 ? 'Ready for Mid-level Interviews' :
+                            avgScore >= 55 ? 'Approaching Interview Ready' :
+                            avgScore >= 40 ? 'More Preparation Needed' :
+                            'Significant Study Required'
       
       return NextResponse.json({
         success: true,

@@ -49,15 +49,20 @@ interface OpenRouterResponse {
   }
 }
 
+// Import tracking function
+import { trackAIRequest } from './security-metrics'
+
 export async function generateAIResponse(
   messages: OpenRouterMessage[],
   model: AIModel = AI_MODELS.LLAMA,
   options: {
     temperature?: number
     max_tokens?: number
+    feature?: string  // Track which feature is making the request
   } = {}
-): Promise<{ content: string; tokensUsed: number }> {
-  const { temperature = 0.7, max_tokens = 2000 } = options
+): Promise<{ content: string; tokensUsed: number; latencyMs: number }> {
+  const { temperature = 0.7, max_tokens = 2000, feature = 'Unknown' } = options
+  const startTime = Date.now()
 
   // Check if API key is configured
   if (!isApiKeyConfigured()) {
@@ -83,9 +88,14 @@ export async function generateAIResponse(
       }),
     })
 
+    const latencyMs = Date.now() - startTime
+
     if (!response.ok) {
       const errorText = await response.text()
       console.error('OpenRouter API error:', errorText)
+      
+      // Track error
+      trackAIRequest(feature, 0, latencyMs, true)
       
       if (response.status === 401) {
         throw new Error('Invalid OpenRouter API key. Please check your OPENROUTER_API_KEY in .env file. Get a new key from https://openrouter.ai/keys')
@@ -97,12 +107,21 @@ export async function generateAIResponse(
     }
 
     const data: OpenRouterResponse = await response.json()
+    const tokensUsed = data.usage?.total_tokens || 0
+    
+    // Track successful request with tokens and latency
+    trackAIRequest(feature, tokensUsed, latencyMs, false)
+    
+    console.log(`[${feature}] AI request: ${tokensUsed} tokens, ${latencyMs}ms`)
     
     return {
       content: data.choices[0]?.message?.content || '',
-      tokensUsed: data.usage?.total_tokens || 0,
+      tokensUsed,
+      latencyMs,
     }
   } catch (error) {
+    const latencyMs = Date.now() - startTime
+    trackAIRequest(feature, 0, latencyMs, true)
     console.error('AI generation error:', error)
     throw error
   }
@@ -198,10 +217,24 @@ Generate ONE technical interview question appropriate for this level and focus a
 Make it practical and specific, not generic.
 Output only the question, nothing else.`,
 
-  evaluateAnswer: (question: string, answer: string, level: string) => `You are evaluating an interview answer.
+  evaluateAnswer: (question: string, answer: string, level: string) => `You are a STRICT senior software engineer evaluating an interview answer.
 Question: ${question}
 Candidate Answer: ${answer}
 Expected Level: ${level}
+
+SCORING GUIDELINES (be strict!):
+- 0-20: No real answer, irrelevant, or "I don't know"
+- 21-40: Vague answer without technical substance
+- 41-60: Basic understanding shown but missing key concepts
+- 61-75: Good answer with most concepts covered
+- 76-90: Strong answer with depth and examples
+- 91-100: Exceptional, interview-ready answer
+
+IMPORTANT: 
+- Short/vague answers should score BELOW 40
+- Answers without technical detail should NOT exceed 50
+- Only give 70+ if the answer demonstrates real knowledge
+- Be harsh on non-answers like "I would google it" or single-word responses
 
 Provide evaluation in this exact JSON format:
 {
@@ -215,7 +248,6 @@ Provide evaluation in this exact JSON format:
   "followUpQuestion": "<optional follow-up question or null>"
 }
 
-Be fair but thorough. Assess technical accuracy, depth of understanding, and communication clarity.
 Output ONLY valid JSON.`,
 }
 

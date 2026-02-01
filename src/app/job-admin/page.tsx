@@ -54,6 +54,13 @@ interface AbuseAttempt {
   lastSeen: string
 }
 
+interface SecurityStatus {
+  name: string
+  status: 'active' | 'monitoring'
+  description: string
+  metric: number
+}
+
 interface HourlyData {
   hour: number
   tokens: number
@@ -75,6 +82,7 @@ export default function AdminPage() {
   const [featureUsage, setFeatureUsage] = useState<FeatureUsage[]>([])
   const [recentIssues, setRecentIssues] = useState<Issue[]>([])
   const [abuseAttempts, setAbuseAttempts] = useState<AbuseAttempt[]>([])
+  const [securityStatus, setSecurityStatus] = useState<SecurityStatus[]>([])
   const [hourlyData, setHourlyData] = useState<HourlyData[]>([])
   const [dataLoaded, setDataLoaded] = useState(false)
 
@@ -96,8 +104,15 @@ export default function AdminPage() {
   const loadAdminData = useCallback(async () => {
     setIsLoading(true)
     try {
-      // Load stats from admin API
-      const statsResponse = await fetch('/api/admin/stats')
+      // Get or create session ID for tracking
+      let sessionId = localStorage.getItem('admin-session-id')
+      if (!sessionId) {
+        sessionId = `admin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        localStorage.setItem('admin-session-id', sessionId)
+      }
+      
+      // Load stats from admin API with session ID
+      const statsResponse = await fetch(`/api/admin/stats?sessionId=${sessionId}`)
       if (statsResponse.ok) {
         const data = await statsResponse.json()
         if (data.stats) setUsageStats(data.stats)
@@ -112,6 +127,7 @@ export default function AdminPage() {
         }
         if (data.hourlyData) setHourlyData(data.hourlyData)
         if (data.abuse) setAbuseAttempts(data.abuse)
+        if (data.platformHealth) setSecurityStatus(data.platformHealth)
       }
       
       // Load issues from issues API
@@ -453,91 +469,115 @@ export default function AdminPage() {
 
               {/* AI Usage Tab */}
               <TabsContent value="usage" className="space-y-6">
-                {featureUsage.length > 0 ? (
-                  <>
-                    <div className="grid lg:grid-cols-3 gap-6">
-                      {featureUsage.map((feature, index) => (
-                        <motion.div
-                          key={feature.name}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <Card glass className="p-6">
-                            <CardHeader className="p-0 mb-4">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                  <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                                    {feature.icon}
-                                  </div>
-                                  <CardTitle className="text-lg">{feature.name}</CardTitle>
-                                </div>
-                                <Badge>{feature.requests.toLocaleString()} req</Badge>
-                              </div>
-                            </CardHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <div className="flex justify-between text-sm mb-1">
-                                  <span className="text-gray-400">Tokens Used</span>
-                                  <span className="text-white">{(feature.tokens / 1000000).toFixed(2)}M</span>
-                                </div>
-                                <Progress value={(feature.tokens / 5000000) * 100} size="sm" />
-                              </div>
-                              <div className="grid grid-cols-2 gap-4 text-center pt-4 border-t border-gray-800">
-                                <div>
-                                  <p className="text-lg font-semibold text-white">{feature.avgLatency}s</p>
-                                  <p className="text-xs text-gray-500">Avg Latency</p>
-                                </div>
-                                <div>
-                                  <p className={`text-lg font-semibold ${feature.errors > 10 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {feature.errors}
-                                  </p>
-                                  <p className="text-xs text-gray-500">Errors</p>
-                                </div>
-                              </div>
-                            </div>
-                          </Card>
-                        </motion.div>
-                      ))}
-                    </div>
-
-                    {/* Token Usage Chart */}
-                    {hourlyData.length > 0 && (
+                {/* Always show feature cards */}
+                <div className="grid lg:grid-cols-3 gap-6">
+                  {(featureUsage.length > 0 ? featureUsage : [
+                    { name: 'CV Maker', tokens: 0, requests: 0, avgLatency: 0, errors: 0, icon: <FileText className="w-5 h-5" /> },
+                    { name: 'CV Analyzer', tokens: 0, requests: 0, avgLatency: 0, errors: 0, icon: <Eye className="w-5 h-5" /> },
+                    { name: 'Interview', tokens: 0, requests: 0, avgLatency: 0, errors: 0, icon: <MessageSquare className="w-5 h-5" /> },
+                  ]).map((feature, index) => (
+                    <motion.div
+                      key={feature.name}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
                       <Card glass className="p-6">
                         <CardHeader className="p-0 mb-4">
-                          <CardTitle>Token Usage Over Time</CardTitle>
-                          <CardDescription>Hourly breakdown of token consumption</CardDescription>
-                        </CardHeader>
-                        <div className="h-64 flex items-end justify-around space-x-2">
-                          {hourlyData.map((data) => {
-                            const maxTokens = Math.max(...hourlyData.map(d => d.tokens), 1)
-                            const height = (data.tokens / maxTokens) * 100
-                            return (
-                              <div key={data.hour} className="flex-1 flex flex-col items-center group">
-                                <div className="relative w-full">
-                                  <div
-                                    className="w-full bg-gradient-to-t from-indigo-600 to-indigo-400 rounded-t transition-all group-hover:from-indigo-500 group-hover:to-indigo-300"
-                                    style={{ height: `${Math.max(height, 5)}%`, minHeight: '8px' }}
-                                  />
-                                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 px-2 py-1 rounded text-xs text-white whitespace-nowrap">
-                                    {data.tokens.toLocaleString()} tokens
-                                  </div>
-                                </div>
-                                <span className="text-xs text-gray-500 mt-2">{data.hour}:00</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className={`w-10 h-10 rounded-xl ${feature.requests > 0 ? 'bg-indigo-500/20' : 'bg-gray-700/30'} flex items-center justify-center ${feature.requests > 0 ? 'text-indigo-400' : 'text-gray-500'}`}>
+                                {feature.icon}
                               </div>
-                            )
-                          })}
+                              <CardTitle className="text-lg">{feature.name}</CardTitle>
+                            </div>
+                            <Badge variant={feature.requests > 0 ? 'default' : 'secondary'}>
+                              {feature.requests.toLocaleString()} req
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="text-gray-400">Tokens Used</span>
+                              <span className="text-white">
+                                {feature.tokens > 0 ? `${(feature.tokens / 1000000).toFixed(3)}M` : '0'}
+                              </span>
+                            </div>
+                            <Progress value={feature.tokens > 0 ? Math.min((feature.tokens / 5000000) * 100, 100) : 0} size="sm" />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-center pt-4 border-t border-gray-800">
+                            <div>
+                              <p className="text-lg font-semibold text-white">
+                                {feature.avgLatency > 0 ? `${feature.avgLatency.toFixed(1)}s` : '--'}
+                              </p>
+                              <p className="text-xs text-gray-500">Avg Latency</p>
+                            </div>
+                            <div>
+                              <p className={`text-lg font-semibold ${feature.errors > 10 ? 'text-red-400' : feature.errors > 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+                                {feature.errors}
+                              </p>
+                              <p className="text-xs text-gray-500">Errors</p>
+                            </div>
+                          </div>
+                          {feature.requests === 0 && (
+                            <div className="text-center pt-2">
+                              <p className="text-xs text-gray-500 italic">No activity yet</p>
+                            </div>
+                          )}
                         </div>
                       </Card>
-                    )}
-                  </>
-                ) : (
-                  <Card glass className="p-12 text-center">
-                    <Zap className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-white mb-2">No Usage Data Yet</h3>
-                    <p className="text-gray-400">AI usage statistics will appear here once users start using the platform.</p>
-                  </Card>
-                )}
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Token Usage Chart */}
+                <Card glass className="p-6">
+                  <CardHeader className="p-0 mb-4">
+                    <CardTitle>Token Usage Over Time</CardTitle>
+                    <CardDescription>Hourly breakdown of token consumption (24h)</CardDescription>
+                  </CardHeader>
+                  <div className="h-64 flex items-end justify-around space-x-1">
+                    {(hourlyData.length > 0 ? hourlyData : Array.from({ length: 24 }, (_, i) => ({ hour: i, tokens: 0 }))).map((data) => {
+                      const maxTokens = Math.max(...hourlyData.map(d => d.tokens), 1)
+                      const height = maxTokens > 0 ? (data.tokens / maxTokens) * 100 : 0
+                      const currentHour = new Date().getHours()
+                      const isCurrentHour = data.hour === currentHour
+                      return (
+                        <div key={data.hour} className="flex-1 flex flex-col items-center group">
+                          <div className="relative w-full h-48 flex items-end">
+                            <div
+                              className={`w-full rounded-t transition-all ${
+                                isCurrentHour 
+                                  ? 'bg-gradient-to-t from-emerald-600 to-emerald-400' 
+                                  : height > 0 
+                                    ? 'bg-gradient-to-t from-indigo-600 to-indigo-400 group-hover:from-indigo-500 group-hover:to-indigo-300'
+                                    : 'bg-gray-700/30'
+                              }`}
+                              style={{ 
+                                height: height > 0 ? `${Math.max(height, 5)}%` : '4px',
+                                minHeight: '4px' 
+                              }}
+                            />
+                            {data.tokens > 0 && (
+                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-900 px-2 py-1 rounded text-xs text-white whitespace-nowrap z-10">
+                                {data.tokens.toLocaleString()} tokens
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-xs mt-2 ${isCurrentHour ? 'text-emerald-400 font-bold' : 'text-gray-500'}`}>
+                            {data.hour}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {hourlyData.every(d => d.tokens === 0) && (
+                    <p className="text-center text-gray-500 text-sm mt-4">
+                      Token usage will appear here as users interact with AI features
+                    </p>
+                  )}
+                </Card>
               </TabsContent>
 
               {/* Issues Tab */}
@@ -781,17 +821,17 @@ export default function AdminPage() {
 
                   <Card glass className="p-6">
                     <CardHeader className="p-0 mb-4">
-                      <CardTitle>Security Status</CardTitle>
-                      <CardDescription>Current protection measures</CardDescription>
+                      <CardTitle>Platform Health</CardTitle>
+                      <CardDescription>Real-time system metrics</CardDescription>
                     </CardHeader>
                     <div className="space-y-3">
-                      {[
-                        { name: 'Rate Limiting', status: 'active', description: 'Prevents excessive requests' },
-                        { name: 'Prompt Filtering', status: 'active', description: 'Blocks malicious prompts' },
-                        { name: 'Session Validation', status: 'active', description: 'Verifies user sessions' },
-                        { name: 'Input Sanitization', status: 'active', description: 'Cleans user inputs' },
-                        { name: 'DDoS Protection', status: 'monitoring', description: 'Monitoring traffic patterns' },
-                      ].map((item) => (
+                      {(securityStatus.length > 0 ? securityStatus : [
+                        { name: 'API Status', status: 'monitoring' as const, description: 'Waiting for requests', metric: 0 },
+                        { name: 'Response Time', status: 'monitoring' as const, description: 'No data yet', metric: 0 },
+                        { name: 'Error Rate', status: 'active' as const, description: 'No errors', metric: 0 },
+                        { name: 'Active Users', status: 'monitoring' as const, description: 'No active users', metric: 0 },
+                        { name: 'Token Usage', status: 'monitoring' as const, description: 'No tokens used', metric: 0 },
+                      ]).map((item) => (
                         <div
                           key={item.name}
                           className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -811,9 +851,14 @@ export default function AdminPage() {
                               <p className="text-xs text-gray-500">{item.description}</p>
                             </div>
                           </div>
-                          <Badge variant={item.status === 'active' ? 'success' : 'warning'}>
-                            {item.status === 'active' ? 'Active' : 'Monitoring'}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            {item.metric > 0 && (
+                              <span className="text-xs text-gray-400 font-mono">{item.metric}</span>
+                            )}
+                            <Badge variant={item.status === 'active' ? 'success' : 'warning'}>
+                              {item.status === 'active' ? 'Active' : 'Monitoring'}
+                            </Badge>
+                          </div>
                         </div>
                       ))}
                     </div>

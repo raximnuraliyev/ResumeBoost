@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:all": "npx prisma generate && next dev --webpack",
+    "dev:warm": "npx prisma generate && (start /b next dev --webpack) && timeout /t 5 && node scripts/warmup.js",
+    "warmup": "node scripts/warmup.js",
     "db:push": "npx prisma db push",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",

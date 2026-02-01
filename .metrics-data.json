@@ -1,0 +1,39 @@
+{
+  "metrics": {
+    "totalTokensUsed": 0,
+    "totalRequests": 3,
+    "totalErrors": 0,
+    "totalResponseTime": 0,
+    "requestsWithTime": 0,
+    "hourlyTokens": [],
+    "hourlyRequests": []
+  },
+  "features": [
+    {
+      "name": "CV Maker",
+      "requests": 0,
+      "tokens": 0,
+      "errors": 0,
+      "totalLatency": 0,
+      "requestsWithLatency": 0
+    },
+    {
+      "name": "CV Analyzer",
+      "requests": 0,
+      "tokens": 0,
+      "errors": 0,
+      "totalLatency": 0,
+      "requestsWithLatency": 0
+    },
+    {
+      "name": "Interview",
+      "requests": 0,
+      "tokens": 0,
+      "errors": 0,
+      "totalLatency": 0,
+      "requestsWithLatency": 0
+    }
+  ],
+  "totalSessions": 1,
+  "lastSaved": "2026-02-01T21:31:49.012Z"
+}

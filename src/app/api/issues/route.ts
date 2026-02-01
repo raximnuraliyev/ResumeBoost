@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 import { FEATURES, ISSUE_SEVERITIES } from '@/lib/constants'
+import { trackRequest, trackSanitizedInput, trackSessionValidation, trackBlockedRequest } from '@/lib/security-metrics'
 
 // In-memory storage for issues (in production, use database)
 const issues = new Map<string, {
@@ -16,18 +17,23 @@ const issues = new Map<string, {
 }>()
 
 export async function POST(request: Request) {
+  trackRequest()
   try {
     const body = await request.json()
     const { sessionId, feature, description, severity, screenshot } = body
     
     if (!sessionId) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Session ID required' },
         { status: 400 }
       )
     }
     
+    trackSessionValidation()
+    
     if (!feature || (feature !== 'other' && !FEATURES.some(f => f.id === feature))) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Valid feature selection required' },
         { status: 400 }
@@ -35,6 +41,7 @@ export async function POST(request: Request) {
     }
     
     if (!description || description.trim().length < 10) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Description must be at least 10 characters' },
         { status: 400 }
@@ -42,11 +49,15 @@ export async function POST(request: Request) {
     }
     
     if (!severity || !ISSUE_SEVERITIES.some(s => s.id === severity)) {
+      trackBlockedRequest()
       return NextResponse.json(
         { success: false, error: 'Valid severity level required' },
         { status: 400 }
       )
     }
+    
+    // Sanitize description input
+    trackSanitizedInput()
     
     const issueId = `ISS-${uuidv4().slice(0, 8).toUpperCase()}`
     const issue = {
@@ -83,6 +94,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  trackRequest()
   try {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')

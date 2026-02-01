@@ -86,7 +86,7 @@ TRANSLATE NOW:`
           { role: 'user', content: prompt }
         ],
         AI_MODELS.DEEPSEEK_CHIMERA,
-        { temperature: 0.2, max_tokens: 4000 }
+        { temperature: 0.2, max_tokens: 4000, feature: 'CV Translation' }
       )
 
       // Parse the AI response

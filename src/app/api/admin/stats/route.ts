@@ -1,192 +1,103 @@
 import { NextResponse } from 'next/server'
+import { 
+  getAllMetrics, 
+  getFeatureUsageData, 
+  getHourlyData, 
+  getPlatformHealth,
+  trackRequest,
+  trackSession,
+} from '@/lib/security-metrics'
 
-// Note: Prisma database is optional - stats work without it
-// Session tracking uses in-memory storage for demo
-
-// OpenRouter API for real usage data
+// OpenRouter API for additional context
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
 
-interface OpenRouterActivity {
-  id: string
-  created_at: string
-  model: string
-  tokens_prompt: number
-  tokens_completion: number
-  total_cost: number
-  latency_ms: number
-  app_name?: string
-}
-
-// Fetch real usage data from OpenRouter API
-async function fetchOpenRouterUsage(): Promise<{
-  activities: OpenRouterActivity[]
-  totalTokens: number
-  totalCost: number
-  avgLatency: number
-  requestCount: number
+// Fetch OpenRouter key info (just for status check)
+async function fetchOpenRouterStatus(): Promise<{
+  isActive: boolean
+  isFreeTier: boolean
+  creditLimit: number
 }> {
   if (!OPENROUTER_API_KEY || !OPENROUTER_API_KEY.startsWith('sk-or-')) {
-    return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
+    return { isActive: false, isFreeTier: true, creditLimit: 0 }
   }
 
   try {
-    const response = await fetch('https://openrouter.ai/api/v1/auth/key', {
+    const keyResponse = await fetch('https://openrouter.ai/api/v1/auth/key', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       },
     })
 
-    if (!response.ok) {
-      console.error('OpenRouter API key info failed:', response.status)
-      return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
+    if (!keyResponse.ok) {
+      return { isActive: false, isFreeTier: true, creditLimit: 0 }
     }
 
-    const keyInfo = await response.json()
+    const keyInfo = await keyResponse.json()
+    const data = keyInfo.data || {}
     
-    // Try to get activity data
-    const activityResponse = await fetch('https://openrouter.ai/api/v1/activity', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      },
-    })
-
-    let activities: OpenRouterActivity[] = []
-    if (activityResponse.ok) {
-      const activityData = await activityResponse.json()
-      activities = activityData.data || []
-    }
-
-    // Calculate totals from key info
-    const totalTokens = keyInfo.data?.usage || 0
-    const totalCost = keyInfo.data?.total_cost || 0
-    
-    // Calculate average latency from activities
-    const avgLatency = activities.length > 0
-      ? activities.reduce((sum, a) => sum + (a.latency_ms || 0), 0) / activities.length / 1000
-      : 0
-
     return {
-      activities,
-      totalTokens,
-      totalCost,
-      avgLatency,
-      requestCount: activities.length,
+      isActive: true,
+      isFreeTier: data.is_free_tier ?? true,
+      creditLimit: data.limit || 0,
     }
-  } catch (error) {
-    console.error('Failed to fetch OpenRouter usage:', error)
-    return { activities: [], totalTokens: 0, totalCost: 0, avgLatency: 0, requestCount: 0 }
+  } catch {
+    return { isActive: false, isFreeTier: true, creditLimit: 0 }
   }
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const timeRange = searchParams.get('timeRange') || '24h'
+  const sessionId = searchParams.get('sessionId')
+  
+  // Track this request and session
+  trackRequest()
+  if (sessionId) {
+    trackSession(sessionId, 'Admin Dashboard')
+  }
   
   try {
-    // Fetch real OpenRouter usage data
-    const openRouterData = await fetchOpenRouterUsage()
+    // Get OpenRouter status (just to check if API is configured)
+    const openRouterStatus = await fetchOpenRouterStatus()
     
-    // Database stats disabled - Prisma Postgres local server not running
-    // Sessions are tracked in-memory for demo purposes
-    const dbStats = { totalSessions: 0, activeSessions: 0 }
+    // Get all metrics from our local tracking
+    const metrics = getAllMetrics()
+    const features = getFeatureUsageData()
+    const hourlyData = getHourlyData()
+    const platformHealth = getPlatformHealth()
     
-    // Calculate stats from OpenRouter activities
-    const activities = openRouterData.activities
-    
-    // Group by feature (based on app name or model)
-    const featureUsageMap: Record<string, {
-      name: string
-      tokens: number
-      requests: number
-      totalLatency: number
-      latencyCount: number
-      cost: number
-    }> = {}
-    
-    // Process activities into feature buckets
-    activities.forEach(activity => {
-      const featureName = activity.app_name || 'CV Maker'
-      
-      if (!featureUsageMap[featureName]) {
-        featureUsageMap[featureName] = {
-          name: featureName,
-          tokens: 0,
-          requests: 0,
-          totalLatency: 0,
-          latencyCount: 0,
-          cost: 0,
-        }
-      }
-      
-      featureUsageMap[featureName].tokens += (activity.tokens_prompt || 0) + (activity.tokens_completion || 0)
-      featureUsageMap[featureName].requests += 1
-      featureUsageMap[featureName].cost += activity.total_cost || 0
-      
-      if (activity.latency_ms) {
-        featureUsageMap[featureName].totalLatency += activity.latency_ms
-        featureUsageMap[featureName].latencyCount += 1
-      }
-    })
+    // Format features for display - always include all features even if 0 requests
+    const formattedFeatures = features
+      .map(feature => ({
+        name: feature.name,
+        tokens: feature.tokens,
+        requests: feature.requests,
+        avgLatency: feature.avgLatency,
+        errors: feature.errors,
+        cost: 0, // Free tier
+      }))
+      .sort((a, b) => b.requests - a.requests)
 
-    // If no activities but we have usage, create a default entry
-    if (Object.keys(featureUsageMap).length === 0 && openRouterData.totalTokens > 0) {
-      featureUsageMap['Job Application Platform'] = {
-        name: 'Job Application Platform',
-        tokens: openRouterData.totalTokens,
-        requests: openRouterData.requestCount || 1,
-        totalLatency: 0,
-        latencyCount: 0,
-        cost: openRouterData.totalCost,
-      }
-    }
-
-    const formattedFeatures = Object.values(featureUsageMap).map(feature => ({
-      name: feature.name,
-      tokens: feature.tokens,
-      requests: feature.requests,
-      avgLatency: feature.latencyCount > 0 
-        ? parseFloat((feature.totalLatency / feature.latencyCount / 1000).toFixed(2))
-        : 0,
-      errors: 0,
-      cost: feature.cost,
+    // Format hourly data for charts
+    const formattedHourly = hourlyData.map(h => ({
+      hour: h.hour,
+      tokens: h.tokens,
     }))
 
-    // Sort by requests descending
-    formattedFeatures.sort((a, b) => b.requests - a.requests)
-
-    // Calculate hourly data from activities
-    const hourlyUsage: Record<number, number> = {}
-    activities.forEach(activity => {
-      const hour = new Date(activity.created_at).getHours()
-      hourlyUsage[hour] = (hourlyUsage[hour] || 0) + (activity.tokens_prompt || 0) + (activity.tokens_completion || 0)
-    })
-
-    const hourlyData = Array.from({ length: 24 }, (_, i) => ({
-      hour: i,
-      tokens: hourlyUsage[i] || 0,
-    }))
-
-    // Find peak hour
-    let peakHour = '--:--'
-    let maxUsage = 0
-    Object.entries(hourlyUsage).forEach(([hour, tokens]) => {
-      if (tokens > maxUsage) {
-        maxUsage = tokens
-        peakHour = `${hour.padStart(2, '0')}:00`
-      }
-    })
-
-    // Format stats
+    // Format stats for display
     const formattedStats = {
-      totalSessions: dbStats.totalSessions,
-      activeSessions: dbStats.activeSessions,
-      totalTokens: openRouterData.totalTokens,
-      avgResponseTime: openRouterData.avgLatency,
-      errorRate: 0,
-      peakHour,
-      totalCost: openRouterData.totalCost,
+      totalSessions: metrics.totalSessions,
+      activeSessions: metrics.activeSessions,
+      totalTokens: metrics.totalTokens,
+      avgResponseTime: metrics.avgResponseTime,
+      errorRate: metrics.errorRate,
+      peakHour: metrics.peakHour,
+      totalCost: 0, // Free tier
+      totalRequests: metrics.totalRequests,
+      totalPageViews: metrics.totalPageViews,
+      isFreeTier: openRouterStatus.isFreeTier,
+      apiActive: openRouterStatus.isActive,
     }
 
     // Return all stats
@@ -195,10 +106,17 @@ export async function GET(request: Request) {
       stats: formattedStats,
       features: formattedFeatures,
       abuse: [],
-      hourlyData,
+      hourlyData: formattedHourly,
+      platformHealth,
+      securityMetrics: {
+        totalRequests: metrics.totalRequests,
+        totalErrors: metrics.totalErrors,
+        errorRate: metrics.errorRate,
+        avgResponseTime: metrics.avgResponseTime,
+      },
       timeRange,
       generatedAt: new Date().toISOString(),
-      source: openRouterData.totalTokens > 0 ? 'openrouter' : 'empty',
+      source: 'local',
     })
   } catch (error) {
     console.error('Admin stats error:', error)
@@ -213,10 +131,12 @@ export async function GET(request: Request) {
         avgResponseTime: 0,
         errorRate: 0,
         peakHour: '--:--',
+        totalRequests: 0,
       },
       features: [],
       abuse: [],
       hourlyData: Array.from({ length: 24 }, (_, i) => ({ hour: i, tokens: 0 })),
+      platformHealth: [],
       timeRange,
       generatedAt: new Date().toISOString(),
       source: 'error',

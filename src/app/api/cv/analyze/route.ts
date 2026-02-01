@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateAIResponse, AI_MODELS } from '@/lib/openrouter'
 import { parsePDF } from '@/lib/pdf-parser'
+import { trackRequest, trackSanitizedInput, trackSessionValidation, trackBlockedRequest, trackFeatureUsage, trackSession } from '@/lib/security-metrics'
 
 // Analysis result type for the API
 interface AnalysisResult {
@@ -93,7 +94,7 @@ Be brutal but constructive. Point out real issues. ${jobDescription ? 'Compare C
       { role: 'user', content: userPrompt }
     ],
     AI_MODELS.DEEPSEEK_CHIMERA,
-    { temperature: 0.4, max_tokens: 2500 }
+    { temperature: 0.4, max_tokens: 2500, feature: 'CV Analysis' }
   )
   
   // Parse AI response as JSON
@@ -250,6 +251,7 @@ function extractCompanyName(jobDescription: string): string | undefined {
 }
 
 export async function POST(request: Request) {
+  trackRequest()
   try {
     const contentType = request.headers.get('content-type') || ''
     
@@ -265,12 +267,19 @@ export async function POST(request: Request) {
       companyName = formData.get('companyName') as string | null || undefined
       // sessionId available for future analytics: formData.get('sessionId')
       
+      trackSessionValidation()
+      trackFeatureUsage('CV Analyzer')
+      
       if (!file) {
+        trackBlockedRequest()
         return NextResponse.json(
           { success: false, error: 'No file uploaded' },
           { status: 400 }
         )
       }
+      
+      // Sanitize input - track it
+      trackSanitizedInput()
       
       // Get file buffer
       const arrayBuffer = await file.arrayBuffer()
