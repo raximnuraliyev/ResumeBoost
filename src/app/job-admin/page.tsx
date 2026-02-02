@@ -491,7 +491,7 @@ export default function AdminPage() {
                               </div>
                               <CardTitle className="text-lg">{feature.name}</CardTitle>
                             </div>
-                            <Badge variant={feature.requests > 0 ? 'default' : 'secondary'}>
+                            <Badge variant={feature.requests > 0 ? 'info' : 'default'}>
                               {feature.requests.toLocaleString()} req
                             </Badge>
                           </div>

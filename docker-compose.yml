@@ -1,0 +1,65 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: resumeboost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-resumeboost}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-resumeboost123}
+      POSTGRES_DB: ${POSTGRES_DB:-resumeboost}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-resumeboost} -d ${POSTGRES_DB:-resumeboost}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - resumeboost-network
+
+  # Adminer - Database Management UI
+  adminer:
+    image: adminer:latest
+    container_name: resumeboost-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: nette
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - resumeboost-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: resumeboost-app
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-resumeboost}:${POSTGRES_PASSWORD:-resumeboost123}@db:5432/${POSTGRES_DB:-resumeboost}?schema=public
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - resumeboost-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  resumeboost-network:
+    driver: bridge

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Enable standalone output for Docker deployment
+  output: 'standalone',
   // Allow cross-origin requests from local network during development
   allowedDevOrigins: [
     'localhost:3000',
@@ -22,6 +24,9 @@ const nextConfig: NextConfig = {
     // More pages can be kept
     pagesBufferLength: 10,
   },
+  // Empty turbopack config to silence Next.js 16 warning
+  // (we use webpack for pdf-parse compatibility)
+  turbopack: {},
   // Webpack configuration for pdf-parse compatibility
   webpack: (config) => {
     config.resolve.alias.canvas = false;

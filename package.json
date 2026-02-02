@@ -11,7 +11,7 @@
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
-    "build": "npx prisma generate && next build",
+    "build": "npx prisma generate && next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "npx prisma generate"

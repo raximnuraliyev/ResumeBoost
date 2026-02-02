@@ -2024,7 +2024,7 @@ ${previewRef.current.innerHTML}
                   <Card glass className="p-4">
                     <h3 className="text-sm font-medium text-white mb-3">CV Analysis</h3>
                     <Button 
-                      variant="primary" 
+                      variant="default" 
                       className="w-full"
                       onClick={() => setCvScores(calculateCVScores(blocks))}
                     >
@@ -2097,7 +2097,7 @@ ${previewRef.current.innerHTML}
                       <Progress 
                         value={cvScores.quality} 
                         size="md" 
-                        variant={cvScores.quality >= 80 ? 'success' : cvScores.quality >= 60 ? 'default' : 'error'} 
+                        variant={cvScores.quality >= 80 ? 'success' : cvScores.quality >= 60 ? 'default' : 'danger'} 
                       />
                     </div>
 
